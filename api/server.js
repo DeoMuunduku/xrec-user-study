@@ -33,7 +33,6 @@ app.post("/api/submit", async (req, res) => {
       return res.status(400).json({ ok: false, error: "Invalid payload" });
     }
 
-    // ⚠️ Il faut que la table "submissions" existe (id, payload, created_at)
     const q = "INSERT INTO submissions(payload) VALUES($1) RETURNING id, created_at";
     const r = await pool.query(q, [payload]);
 
@@ -47,7 +46,7 @@ app.post("/api/submit", async (req, res) => {
   }
 });
 
-// ✅ ADMIN: voir les soumissions dans le navigateur (protégé par token)
+// ✅ ADMIN: voir les soumissions (protégé par token) + filtre pid optionnel
 app.get("/api/admin/submissions", async (req, res) => {
   try {
     const token = req.header("x-admin-token") || req.query.token;
@@ -60,11 +59,20 @@ app.get("/api/admin/submissions", async (req, res) => {
     }
 
     const limit = Math.min(Number(req.query.limit || 50), 500);
-    const r = await pool.query(
-      "SELECT id, created_at, payload FROM submissions ORDER BY id DESC LIMIT $1",
-      [limit]
-    );
+    const pid = (req.query.pid || "").trim();
 
+    let sql = "SELECT id, created_at, payload FROM submissions";
+    const params = [];
+
+    if (pid) {
+      params.push(pid);
+      sql += ` WHERE payload->>'participantId' = $${params.length}`;
+    }
+
+    params.push(limit);
+    sql += ` ORDER BY id DESC LIMIT $${params.length}`;
+
+    const r = await pool.query(sql, params);
     res.json({ ok: true, count: r.rowCount, rows: r.rows });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
