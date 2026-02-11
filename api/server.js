@@ -39,9 +39,33 @@ app.post("/api/submit", async (req, res) => {
 
     res.json({
       ok: true,
-      participantNumber: r.rows[0].id,
+      participantNumber: String(r.rows[0].id),
       createdAt: r.rows[0].created_at,
     });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+// ✅ ADMIN: voir les soumissions dans le navigateur (protégé par token)
+app.get("/api/admin/submissions", async (req, res) => {
+  try {
+    const token = req.header("x-admin-token") || req.query.token;
+
+    if (!process.env.ADMIN_TOKEN) {
+      return res.status(500).json({ ok: false, error: "ADMIN_TOKEN manquant (Render env var)" });
+    }
+    if (token !== process.env.ADMIN_TOKEN) {
+      return res.status(401).json({ ok: false, error: "Unauthorized" });
+    }
+
+    const limit = Math.min(Number(req.query.limit || 50), 500);
+    const r = await pool.query(
+      "SELECT id, created_at, payload FROM submissions ORDER BY id DESC LIMIT $1",
+      [limit]
+    );
+
+    res.json({ ok: true, count: r.rowCount, rows: r.rows });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
