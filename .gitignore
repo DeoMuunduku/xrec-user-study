@@ -1,2 +1,12 @@
 web/.env
 web/.env.local
+
+# reco-api
+reco-api/.venv/
+reco-api/__pycache__/
+reco-api/.python-version
+reco-api/*.pyc
+
+# web env
+web/.env
+web/.env.local
