@@ -1,187 +1,129 @@
+# /Users/deomunduku/xrec-user-study/reco-api/app.py
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional
 import os
 import csv
-import hashlib
-from typing import Dict, List, Optional, Any
-
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-
-
-# =========================
-# CONFIG
-# =========================
-
-CSV_PATH = os.environ.get("RECS_CSV_PATH", "data/recs_bpr_top10.csv")
-
-# IMPORTANT : ces clés doivent correspondre aux clés RESTAURANTS côté web (App.jsx)
-# Ex: RESTAURANTS = { ulele: {...}, duchess: {...}, ... }
-RESTAURANT_KEYS = os.environ.get("RESTAURANT_KEYS", "ulele,duchess").split(",")
-
-# CORS (ajoute tes ports locaux ici)
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:5175",
-    "http://localhost:5176",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-    "http://127.0.0.1:5175",
-    "http://127.0.0.1:5176",
-    "https://xrec-user-study.onrender.com",
-    "https://xrec-user-study-reco.onrender.com",
-]
+import zlib
 
 app = FastAPI(title="xrec reco-api")
 
+# ----------------------------
+# Config
+# ----------------------------
+CSV_PATH = os.getenv("RECS_CSV_PATH", "data/recs_bpr_top10.csv")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# 30 restaurants keys used by the WEB (must match App.jsx RESTAURANTS keys)
+RESTAURANT_KEYS = [f"r{i:02d}" for i in range(1, 31)]
 
-
-# =========================
-# LOAD CSV (user_id -> topK items)
-# =========================
-
-# Map: user_id -> list of items [{item_id, rank, score}]
-RECS_BY_USER: Dict[str, List[Dict[str, Any]]] = {}
+# Optional: load CSV recommendations (your existing /recommend endpoint)
+USER_TO_ITEMS: Dict[str, List[str]] = {}
 LOAD_ERROR: Optional[str] = None
 
 
-def _safe_float(x: str) -> float:
+def load_csv_recs(path: str) -> None:
+    global USER_TO_ITEMS, LOAD_ERROR
+    USER_TO_ITEMS = {}
+    LOAD_ERROR = None
     try:
-        return float(x)
-    except Exception:
-        return 0.0
+        if not os.path.exists(path):
+            LOAD_ERROR = f"CSV not found: {path}"
+            return
+
+        with open(path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            # expected columns might be: user_id,item_id,rank,score ...
+            # We'll accept any with at least user_id + item_id
+            for row in reader:
+                uid = str(row.get("user_id", "")).strip()
+                iid = str(row.get("item_id", "")).strip()
+                if not uid or not iid:
+                    continue
+                USER_TO_ITEMS.setdefault(uid, []).append(iid)
+
+    except Exception as e:
+        LOAD_ERROR = str(e)
 
 
-def load_csv(path: str) -> Dict[str, List[Dict[str, Any]]]:
-    out: Dict[str, List[Dict[str, Any]]] = {}
-    with open(path, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            u = (row.get("user_id") or "").strip()
-            if not u:
-                continue
-            item_id = (row.get("item_id") or "").strip()
-            rank = int((row.get("rank") or "0").strip() or 0)
-            score = _safe_float((row.get("score") or "0").strip())
-            out.setdefault(u, []).append({"item_id": item_id, "rank": rank, "score": score})
-    # tri par rank
-    for u in out:
-        out[u].sort(key=lambda x: x["rank"])
-    return out
+load_csv_recs(CSV_PATH)
 
-
-def stable_bucket(key: str, n: int) -> int:
-    """Renvoie un index 0..n-1 déterministe à partir d'une clé (stable, pas random)."""
-    if n <= 0:
-        return 0
-    h = hashlib.sha256(key.encode("utf-8")).hexdigest()
-    return int(h[:8], 16) % n
-
-
-def choose_restaurant_key(participant_id: str, selected_cues: List[str]) -> str:
-    """
-    Mapping déterministe :
-    - dépend de participant_id + selected_cues (donc si l'user refait le même choix => même resto)
-    - différent si les cues changent
-    """
-    keys = [k.strip() for k in RESTAURANT_KEYS if k.strip()]
-    if not keys:
-        return "ulele"
-    cues_norm = sorted([c.strip() for c in selected_cues if c and isinstance(c, str)])
-    signature = f"{participant_id}::" + "|".join(cues_norm)
-    idx = stable_bucket(signature, len(keys))
-    return keys[idx]
-
-
-@app.on_event("startup")
-def _startup():
-    global RECS_BY_USER, LOAD_ERROR
-    if os.path.exists(CSV_PATH):
-        try:
-            RECS_BY_USER = load_csv(CSV_PATH)
-            LOAD_ERROR = None
-            print(f"[reco-api] Loaded {len(RECS_BY_USER)} users from {CSV_PATH}")
-        except Exception as e:
-            LOAD_ERROR = f"csv load error: {e}"
-            RECS_BY_USER = {}
-            print(f"[reco-api] ERROR loading CSV: {LOAD_ERROR}")
-    else:
-        LOAD_ERROR = f"csv not found: {CSV_PATH}"
-        RECS_BY_USER = {}
-        print(f"[reco-api] WARNING: {LOAD_ERROR}")
-
-
-# =========================
-# API MODELS
-# =========================
-
+# ----------------------------
+# Models
+# ----------------------------
 class RecommendFromPrefsIn(BaseModel):
     participantId: str
-    selectedCues: List[str] = []
+    selectedCues: List[str] = Field(default_factory=list)
 
 
-# =========================
-# ROUTES
-# =========================
+# ----------------------------
+# Helpers
+# ----------------------------
+def stable_pick_restaurant(participant_id: str, selected_cues: List[str]) -> str:
+    """
+    Deterministic mapping:
+    - depends on participantId + sorted selectedCues
+    - returns one key among r01..r30
+    """
+    cues = sorted([c.strip() for c in selected_cues if str(c).strip()])
+    base = f"{participant_id}|{','.join(cues)}"
+    h = zlib.crc32(base.encode("utf-8"))  # stable across runs
+    idx = h % len(RESTAURANT_KEYS)
+    return RESTAURANT_KEYS[idx]
 
+
+# ----------------------------
+# Endpoints
+# ----------------------------
 @app.get("/health")
-def health():
+def health() -> Dict[str, Any]:
     return {
         "ok": True,
         "csv_path": CSV_PATH,
-        "loaded_users": len(RECS_BY_USER),
+        "loaded_users": len(USER_TO_ITEMS),
         "load_error": LOAD_ERROR,
-        "restaurant_keys": [k.strip() for k in RESTAURANT_KEYS if k.strip()],
+        "restaurant_keys": RESTAURANT_KEYS,
     }
 
 
 @app.get("/recommend")
-def recommend(
-    user_id: str = Query("demo", description="user_id (participantId côté web)"),
-    k: int = Query(10, ge=1, le=50),
-):
+def recommend(user_id: str = "demo", k: int = 10) -> Dict[str, Any]:
     """
-    2 modes :
-    1) Si user_id existe dans le CSV => renvoie le top-k du CSV (item_id = ids Yelp originaux)
-    2) Sinon => fallback déterministe vers une clé restaurant (ex: 'ulele')
-       (utile tant que tu n’as pas encore le mapping Yelp -> RESTAURANTS)
+    Existing endpoint:
+    1) If user_id exists in CSV => top-k from CSV
+    2) else fallback deterministic => r01..r30 (NOT ulele)
     """
-    if user_id in RECS_BY_USER:
-        items = RECS_BY_USER[user_id][:k]
-        return {"user_id": user_id, "k": min(k, len(items)), "items": items, "mode": "csv"}
+    k = max(1, min(int(k), 50))
 
-    # fallback déterministe sur RESTAURANT_KEYS, basé seulement sur user_id
-    chosen = choose_restaurant_key(user_id, selected_cues=[])
+    if user_id in USER_TO_ITEMS and USER_TO_ITEMS[user_id]:
+        items = USER_TO_ITEMS[user_id][:k]
+        return {
+            "user_id": user_id,
+            "k": k,
+            "items": [{"item_id": iid, "rank": i + 1, "score": 1.0} for i, iid in enumerate(items)],
+            "mode": "csv",
+        }
+
+    picked = stable_pick_restaurant(user_id, [])
     return {
         "user_id": user_id,
         "k": 1,
-        "items": [{"item_id": chosen, "rank": 1, "score": 1.0}],
-        "mode": "fallback_restaurant_key",
+        "items": [{"item_id": picked, "rank": 1, "score": 1.0}],
+        "mode": "fallback",
     }
 
 
 @app.post("/recommend_from_prefs")
-def recommend_from_prefs(inp: RecommendFromPrefsIn):
+def recommend_from_prefs(inp: RecommendFromPrefsIn) -> Dict[str, Any]:
     """
-    Mapping déterministe participantId + selectedCues -> restaurant key
-    C’est CE endpoint que tu veux si tu veux que:
-    - ABC => resto1
-    - BCD => resto2
-    et si l'user refait la même sélection => même resto.
+    THIS is your main endpoint:
+    - same cues => same restaurant
+    - different cues => often different restaurant
     """
-    chosen = choose_restaurant_key(inp.participantId, inp.selectedCues)
+    picked = stable_pick_restaurant(inp.participantId, inp.selectedCues)
     return {
         "user_id": inp.participantId,
         "k": 1,
-        "items": [{"item_id": chosen, "rank": 1, "score": 1.0}],
+        "items": [{"item_id": picked, "rank": 1, "score": 1.0}],
         "mode": "prefs_mapping",
         "selectedCues": inp.selectedCues,
     }
