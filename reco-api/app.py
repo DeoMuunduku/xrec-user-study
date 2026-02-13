@@ -1,5 +1,6 @@
 # /Users/deomunduku/xrec-user-study/reco-api/app.py
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import os
@@ -7,6 +8,27 @@ import csv
 import zlib
 
 app = FastAPI(title="xrec reco-api")
+
+# ----------------------------
+# CORS (IMPORTANT for browser)
+# ----------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        # Local Vite ports (add more if needed)
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176",
+        "http://localhost:5177",
+        "http://localhost:5178",
+        # Render front
+        "https://xrec-user-study.onrender.com",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ----------------------------
 # Config
