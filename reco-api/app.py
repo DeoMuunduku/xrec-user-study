@@ -11,7 +11,7 @@ import zlib
 app = FastAPI(title="xrec reco-api")
 
 # ----------------------------
-# CORS (IMPORTANT for browser)
+# CORS (for browser)
 # ----------------------------
 app.add_middleware(
     CORSMiddleware,
@@ -36,18 +36,19 @@ app.add_middleware(
 # ----------------------------
 CSV_PATH = os.getenv("RECS_CSV_PATH", "data/recs_bpr_top10.csv")
 
-# 30 restaurants keys used by the WEB (must match App.jsx RESTAURANTS keys)
+# Must match App.jsx RESTAURANTS keys
 RESTAURANT_KEYS = [f"r{i:02d}" for i in range(1, 31)]
 
-# Optional: load CSV recommendations (your existing /recommend endpoint)
 USER_TO_ITEMS: Dict[str, List[str]] = {}
 LOAD_ERROR: Optional[str] = None
 
 
 def load_csv_recs(path: str) -> None:
+    """Loads a CSV file of recs if present. Expected at least user_id,item_id."""
     global USER_TO_ITEMS, LOAD_ERROR
     USER_TO_ITEMS = {}
     LOAD_ERROR = None
+
     try:
         if not os.path.exists(path):
             LOAD_ERROR = f"CSV not found: {path}"
@@ -81,20 +82,23 @@ class RecommendFromPrefsIn(BaseModel):
 def stable_pick_restaurant(participant_id: str, selected_cues: List[str]) -> str:
     """
     Deterministic mapping:
-    - depends on participantId + sorted selectedCues
-    - returns one key among r01..r30
+    depends on participantId + sorted selectedCues
+    returns one key among r01..r30
     """
-    cues = sorted([c.strip() for c in selected_cues if str(c).strip()])
+    cues = sorted([str(c).strip() for c in selected_cues if str(c).strip()])
     base = f"{participant_id}|{','.join(cues)}"
-    h = zlib.crc32(base.encode("utf-8"))  # stable across runs
+    h = zlib.crc32(base.encode("utf-8"))
     idx = h % len(RESTAURANT_KEYS)
     return RESTAURANT_KEYS[idx]
 
 # ----------------------------
 # Endpoints
 # ----------------------------
+@app.get("/")
+def root() -> Dict[str, Any]:
+    return {"ok": True, "service": "xrec reco-api"}
 
-# ✅ IMPORTANT: accept HEAD for uptime checks (UptimeRobot / Render etc.)
+# ✅ GET + HEAD for uptime monitors
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health() -> Dict[str, Any]:
     return {
@@ -105,13 +109,11 @@ def health() -> Dict[str, Any]:
         "restaurant_keys": RESTAURANT_KEYS,
     }
 
-
 @app.get("/recommend")
 def recommend(user_id: str = "demo", k: int = 10) -> Dict[str, Any]:
     """
-    Existing endpoint:
     1) If user_id exists in CSV => top-k from CSV
-    2) else fallback deterministic => r01..r30
+    2) else fallback deterministic among r01..r30
     """
     k = max(1, min(int(k), 50))
 
@@ -132,13 +134,12 @@ def recommend(user_id: str = "demo", k: int = 10) -> Dict[str, Any]:
         "mode": "fallback",
     }
 
-
 @app.post("/recommend_from_prefs")
 def recommend_from_prefs(inp: RecommendFromPrefsIn) -> Dict[str, Any]:
     """
     Main endpoint:
-    - same cues => same restaurant
-    - different cues => often different restaurant
+    same cues => same restaurant
+    different cues => often different restaurant
     """
     picked = stable_pick_restaurant(inp.participantId, inp.selectedCues)
     return {
