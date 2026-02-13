@@ -1,4 +1,5 @@
 # /Users/deomunduku/xrec-user-study/reco-api/app.py
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -15,7 +16,7 @@ app = FastAPI(title="xrec reco-api")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        # Local Vite ports (add more if needed)
+        # Local Vite ports
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",
@@ -54,8 +55,6 @@ def load_csv_recs(path: str) -> None:
 
         with open(path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
-            # expected columns might be: user_id,item_id,rank,score ...
-            # We'll accept any with at least user_id + item_id
             for row in reader:
                 uid = str(row.get("user_id", "")).strip()
                 iid = str(row.get("item_id", "")).strip()
@@ -76,7 +75,6 @@ class RecommendFromPrefsIn(BaseModel):
     participantId: str
     selectedCues: List[str] = Field(default_factory=list)
 
-
 # ----------------------------
 # Helpers
 # ----------------------------
@@ -92,11 +90,12 @@ def stable_pick_restaurant(participant_id: str, selected_cues: List[str]) -> str
     idx = h % len(RESTAURANT_KEYS)
     return RESTAURANT_KEYS[idx]
 
-
 # ----------------------------
 # Endpoints
 # ----------------------------
-@app.get("/health")
+
+# ✅ IMPORTANT: accept HEAD for uptime checks (UptimeRobot / Render etc.)
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health() -> Dict[str, Any]:
     return {
         "ok": True,
@@ -112,7 +111,7 @@ def recommend(user_id: str = "demo", k: int = 10) -> Dict[str, Any]:
     """
     Existing endpoint:
     1) If user_id exists in CSV => top-k from CSV
-    2) else fallback deterministic => r01..r30 (NOT ulele)
+    2) else fallback deterministic => r01..r30
     """
     k = max(1, min(int(k), 50))
 
@@ -137,7 +136,7 @@ def recommend(user_id: str = "demo", k: int = 10) -> Dict[str, Any]:
 @app.post("/recommend_from_prefs")
 def recommend_from_prefs(inp: RecommendFromPrefsIn) -> Dict[str, Any]:
     """
-    THIS is your main endpoint:
+    Main endpoint:
     - same cues => same restaurant
     - different cues => often different restaurant
     """
