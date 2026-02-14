@@ -1,16 +1,22 @@
 // /Users/deomunduku/xrec-user-study/api/server.js
 import express from "express";
 import cors from "cors";
-import fs from "fs/promises";
-import path from "path";
+
+/**
+ * ✅ Google Apps Script Web App (ton lien /exec)
+ * Important:
+ * - doit avoir doGet + doPost dans Apps Script
+ * - déployé en "Anyone" (ou au moins "Anyone with link")
+ */
+const SHEETS_WEBAPP_URL =
+  process.env.SHEETS_WEBAPP_URL ||
+  "https://script.google.com/macros/s/AKfycbwclUgddk4F9n65FKx5x2e5ZRVNq2eu5yRV1lkOj2b1hrmKmdQs68lkNFc4fzlL34zRsQ/exec";
 
 const app = express();
 
 /* =========================
-   CONFIG
+   CORS + JSON
    ========================= */
-
-// CORS : autorise ton Vite local + ton Render front (et tout le reste si besoin)
 app.use(
   cors({
     origin: "*",
@@ -18,92 +24,62 @@ app.use(
     allowedHeaders: ["Content-Type"],
   })
 );
-
-// JSON : limite petite = plus rapide + évite payload énorme
-app.use(express.json({ limit: "64kb" }));
-
-// Emplacement de stockage (JSONL = 1 ligne JSON par soumission)
-const DATA_DIR = process.env.DATA_DIR || "data";
-const SUBMIT_FILE = process.env.SUBMIT_FILE || "submissions.jsonl";
-
-// Optionnel : si tu as un disque persistant Render monté sur /var/data
-// mets DATA_DIR=/var/data dans Render env vars.
-const submitPath = path.join(DATA_DIR, SUBMIT_FILE);
-
-/* =========================
-   HELPERS
-   ========================= */
-
-async function ensureDir() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-}
-
-function safeJson(obj) {
-  try {
-    return JSON.stringify(obj);
-  } catch {
-    return JSON.stringify({ error: "JSON stringify failed" });
-  }
-}
-
-// Écriture ASYNC "fire-and-forget" : on ne bloque pas la réponse HTTP
-async function appendSubmission(payload) {
-  try {
-    await ensureDir();
-    const line = safeJson(payload) + "\n";
-    await fs.appendFile(submitPath, line, "utf-8");
-  } catch (e) {
-    // On log seulement : on ne casse pas l’API côté utilisateur
-    console.error("[SUBMIT] append failed:", e?.message || e);
-  }
-}
+app.use(express.json({ limit: "128kb" }));
 
 /* =========================
    ROUTES
    ========================= */
 
-// Health : accepte GET + HEAD (utile pour UptimeRobot/Render)
-app.all("/health", (req, res) => {
-  res.status(200).json({ ok: true });
+// Health : utile pour UptimeRobot (GET/HEAD)
+app.all("/health", (req, res) => res.status(200).json({ ok: true }));
+
+// Petit ping vers Apps Script (test rapide)
+app.get("/api/sheets_ping", async (req, res) => {
+  try {
+    const r = await fetch(`${SHEETS_WEBAPP_URL}?ping=1`, { method: "GET" });
+    const txt = await r.text();
+    res.status(200).send(txt);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
 });
 
-// Submit : réponse immédiate + sauvegarde en background
+// Submit : répond vite + envoie en background vers Google Sheets
 app.post("/api/submit", (req, res) => {
   const payload = req.body || {};
 
-  // ✅ Option : réduire encore le payload stocké (évite textes longs)
-  // Tu peux adapter selon tes besoins. Là je garde le minimum utile.
-  const minimized = {
-    ts: new Date().toISOString(),
-    participantId: payload.participantId,
-    timeCondition: payload.timeCondition,
-    readSeconds: payload.readSeconds,
-    K: payload.K,
-    restaurantKey: payload.restaurantKey,
-    restaurantName: payload.restaurantName,
-    alignedIsA: payload.alignedIsA,
-    orderAB: payload.orderAB,
-    alignedOrder: payload.alignedOrder,
-    baselineOrder: payload.baselineOrder,
-    selectedCount: payload.selectedCount,
-    selectedCues: payload.selectedCues,
-    cueSet: payload.cueSet,
-    answers: payload.answers,
-  };
-
-  // ✅ Répond tout de suite (le front stoppe l’attente)
+  // ✅ réponse immédiate
   res.status(200).json({ ok: true });
 
-  // ✅ Sauvegarde après (sans await)
-  appendSubmission(minimized);
+  // ✅ envoi background (ne bloque pas)
+  (async () => {
+    try {
+      const r = await fetch(SHEETS_WEBAPP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // IMPORTANT: Apps Script reçoit bien du JSON si doPost lit e.postData.contents
+        body: JSON.stringify(payload),
+        redirect: "follow",
+      });
+
+      // (optionnel) debug si besoin
+      const text = await r.text();
+      if (!r.ok) {
+        console.error("[SHEETS] POST failed:", r.status, text);
+      } else {
+        // console.log("[SHEETS] OK:", text);
+      }
+    } catch (e) {
+      console.error("[SHEETS] POST error:", e?.message || e);
+    }
+  })();
 });
 
 /* =========================
    START
    ========================= */
-
-const PORT = process.env.PORT || 10000; // Render met PORT automatiquement
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`[API] listening on port ${PORT}`);
-  console.log(`[API] submitPath = ${submitPath}`);
+  console.log(`[API] SHEETS_WEBAPP_URL = ${SHEETS_WEBAPP_URL}`);
 });
