@@ -707,6 +707,24 @@ function sharedRemainder(lang) {
   );
 }
 
+// ✅ AJOUT : forcer le préfixe "Nous vous recommandons ce restaurant parce que" au tout début
+function forceReasonPrefixAtStart(lang, paragraph) {
+  const p = String(paragraph || "").trim();
+
+  if (lang === "fr") {
+    // Si ça commence déjà par "Nous vous recommandons ce restaurant parce ...", on ne touche pas.
+    if (/^Nous\s+vous\s+recommandons\s+ce\s+restaurant\s+parce\s+qu/i.test(p)) return p;
+    if (/^Nous\s+vous\s+recommandons\s+ce\s+restaurant\s+parce\s+que/i.test(p)) return p;
+
+    // Sinon, on force EXACTEMENT la phrase demandée au début
+    return `Nous vous recommandons ce restaurant parce que ${p}`;
+  }
+
+  // EN : même logique (au cas où)
+  if (/^We\s+recommend\s+this\s+restaurant\s+because/i.test(p)) return p;
+  return `We recommend this restaurant because ${p}`;
+}
+
 function clipWords(text, maxWords) {
   const w = String(text || "")
     .trim()
@@ -870,7 +888,8 @@ function buildExplanationOneParagraph({ restaurant, cueOrder, cueSet, prefMap, m
   const remainder = sharedRemainder(lang);
   const parts = mode === "remainder_first" ? [remainder, ...cueSentences] : [...cueSentences, remainder];
 
-  return parts.join(" ").replace(/\s+/g, " ").trim();
+  // ✅ MODIF : on force le préfixe uniquement si pas déjà présent
+  return forceReasonPrefixAtStart(lang, parts.join(" ").replace(/\s+/g, " ").trim());
 }
 
 /* =========================================================
