@@ -694,18 +694,19 @@ function shuffleDeterministic(arr, seedStr) {
    NATURAL EXPLANATION BUILDER (bilingue)
    ========================================================= */
 
-function sharedRemainder(lang) {
-  if (lang === "en") {
+   function sharedRemainder(lang) {
+    if (lang === "en") {
+      return (
+        "several positive aspects stand out from the available reviews. " +
+        "This provides a useful overview, although some details may vary depending on time and crowd."
+      );
+    }
     return (
-      "We recommend this restaurant because it matches your priorities overall. " +
-      "Available information gives a useful overview, although some details may vary depending on time and crowd."
+      "plusieurs éléments positifs ressortent des avis disponibles. " +
+      "Cela donne un aperçu utile, même si certains détails peuvent varier selon l’heure et l’affluence."
     );
   }
-  return (
-    "Nous vous recommandons ce restaurant parce qu’il correspond globalement à vos priorités. " +
-    "Les informations disponibles donnent un aperçu utile, même si certains détails peuvent varier selon l’heure et l’affluence."
-  );
-}
+  
 
 // ✅ AJOUT : forcer le préfixe "Nous vous recommandons ce restaurant parce que" au tout début
 function forceReasonPrefixAtStart(lang, paragraph) {
