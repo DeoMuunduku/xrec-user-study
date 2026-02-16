@@ -10,3 +10,4 @@ reco-api/*.pyc
 # web env
 web/.env
 web/.env.local
+api/.env
