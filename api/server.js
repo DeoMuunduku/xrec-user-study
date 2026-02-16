@@ -1,3 +1,4 @@
+import "dotenv/config";
 // api/server.js
 import express from "express";
 import cors from "cors";

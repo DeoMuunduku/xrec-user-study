@@ -6,8 +6,11 @@ import "./App.css";
    I18N
    ========================================================= */
 
-const STORAGE_KEY_LANG = "study_lang_v1";
 const LANGS = ["fr", "en"];
+
+// ✅ C) Multi-participants: use sessionStorage per tab/session (one participant)
+// (No more global localStorage timeCondition/orderAB.)
+const STORAGE_KEY_LANG = "study_lang_v1";
 
 const I18N = {
   fr: {
@@ -57,7 +60,6 @@ const I18N = {
 
     // reading
     recommendationH2: "Recommandation",
-    // ✅ FIX 1: ajoute "le restaurant"
     basedOnSingle: "En nous basant sur votre priorité actuelle, nous vous recommandons le restaurant",
     basedOnPlural: "En nous basant sur vos priorités actuelles, nous vous recommandons le restaurant",
     explanation: "Explication",
@@ -77,6 +79,10 @@ const I18N = {
     q5help: "Choisissez 2 éléments, ou bien sélectionnez “Je ne sais pas”.",
     q6: "6) Quelle partie de l’explication avez-vous lue ?",
     q7: "7) Cette explication m’aide à prendre ma décision.",
+
+    // ✅ Q8/Q9 changed to Yes/No/Unsure (no Likert)
+    q8: "8) En lisant l’explication, je me suis senti(e) pressé(e) par le temps",
+    q9: "9) Le temps de lecture était suffisant pour comprendre l’essentiel ",
 
     yes: "Oui",
     no: "Non",
@@ -159,7 +165,6 @@ const I18N = {
 
     // reading
     recommendationH2: "Recommendation",
-    // ✅ FIX 1: ajoute "the restaurant"
     basedOnSingle: "Based on your current priority, we recommend the restaurant",
     basedOnPlural: "Based on your current priorities, we recommend the restaurant",
     explanation: "Explanation",
@@ -179,6 +184,10 @@ const I18N = {
     q5help: 'Choose 2 items, or select “I don’t know”.',
     q6: "6) How much of the explanation did you read?",
     q7: "7) This explanation helps me make my decision.",
+
+    // ✅ Q8/Q9 changed to Yes/No/Unsure (no Likert)
+    q8: "8) While reading the explanation, I felt rushed by time.",
+    q9: "9) The time I had to read the explanation allowed me to understand the main idea",
 
     yes: "Yes",
     no: "No",
@@ -235,9 +244,8 @@ const CUE_LABELS = {
 const CUE_IDS = Object.keys(CUE_LABELS);
 
 const TIME_CONDITIONS = ["8s", "16s", "full"];
-const STORAGE_KEY_TIME = "study_time_condition_v11";
 
-/** Tu veux garder 20s */
+/** keep 20s */
 const PREPARE_SECONDS = 20;
 
 function getReadSeconds(cond) {
@@ -297,13 +305,12 @@ async function fetchRecoFromPrefs(participantId, selectedCues) {
 }
 
 /* =========================================================
-   DATA : 30 restaurants + evidence (bilingue)
+   DATA : restaurants + evidence (bilingue)
    ========================================================= */
 
 const tx = (fr, en) => ({ fr, en });
 
 function makeEvidence(overrides = {}) {
-  // base bilingual
   const base = {
     price: { score: 3.8, text: tx("Prix corrects, bon rapport qualité/prix.", "Reasonable prices, good value for money.") },
     food_quality: { score: 4.1, text: tx("Qualité globale bonne, ingrédients frais.", "Good overall food quality, fresh ingredients.") },
@@ -314,8 +321,6 @@ function makeEvidence(overrides = {}) {
     location: { score: 4.1, text: tx("Emplacement pratique, accès simple.", "Convenient location, easy to reach.") },
     portion: { score: 3.9, text: tx("Portions correctes et équilibrées.", "Portions are fair and balanced.") },
   };
-
-  // merge overrides (expects same shape)
   return { ...base, ...overrides };
 }
 
@@ -430,12 +435,7 @@ const RESTAURANTS = {
       price: { score: 3.0, text: tx("Prix un peu élevés (vue).", "Slightly expensive (you pay for the view).") },
     }),
   },
-  r15: {
-    name: "Super Clean Spot",
-    evidence: makeEvidence({
-      cleanliness: { score: 5.0, text: tx("Impeccable, hygiène irréprochable.", "Impeccable, spotless hygiene.") },
-    }),
-  },
+  r15: { name: "Super Clean Spot", evidence: makeEvidence({ cleanliness: { score: 5.0, text: tx("Impeccable, hygiène irréprochable.", "Impeccable, spotless hygiene.") } }) },
   r16: {
     name: "Generous Plates",
     evidence: makeEvidence({
@@ -443,98 +443,20 @@ const RESTAURANTS = {
       price: { score: 4.0, text: tx("Bon rapport quantité/prix.", "Great quantity for the price.") },
     }),
   },
-  r17: {
-    name: "Quiet Place",
-    evidence: makeEvidence({
-      ambiance: { score: 4.8, text: tx("Très calme, idéal pour discuter.", "Very quiet, perfect to talk.") },
-      cleanliness: { score: 4.5, text: tx("Très propre.", "Very clean.") },
-    }),
-  },
-  r18: {
-    name: "Lively Night",
-    evidence: makeEvidence({
-      ambiance: { score: 5.0, text: tx("Ambiance très animée, musique.", "Very lively vibe, music.") },
-      wait_time: { score: 3.1, text: tx("Attente possible en soirée.", "Possible wait in the evening.") },
-    }),
-  },
-  r19: {
-    name: "Super Location",
-    evidence: makeEvidence({
-      location: { score: 5.0, text: tx("Emplacement excellent, très pratique.", "Excellent location, very convenient.") },
-    }),
-  },
-  r20: {
-    name: "Short Wait",
-    evidence: makeEvidence({
-      wait_time: { score: 5.0, text: tx("Attente quasi nulle, très rapide.", "Almost no waiting, very fast.") },
-      service: { score: 4.4, text: tx("Service rapide.", "Fast service.") },
-    }),
-  },
-  r21: {
-    name: "High Quality",
-    evidence: makeEvidence({
-      food_quality: { score: 5.0, text: tx("Excellente qualité, saveurs très maîtrisées.", "Excellent quality, flavors are well mastered.") },
-      price: { score: 3.1, text: tx("Prix moyens+.", "Mid to slightly high prices.") },
-    }),
-  },
-  r22: {
-    name: "Best Value",
-    evidence: makeEvidence({
-      price: { score: 4.9, text: tx("Excellent prix, très bon rapport.", "Excellent pricing, great value.") },
-      portion: { score: 4.5, text: tx("Portions généreuses.", "Generous portions.") },
-    }),
-  },
-  r23: {
-    name: "Cozy & Calm",
-    evidence: makeEvidence({
-      ambiance: { score: 4.9, text: tx("Très cosy et calme.", "Very cozy and calm.") },
-    }),
-  },
-  r24: {
-    name: "Premium Service",
-    evidence: makeEvidence({
-      service: { score: 5.0, text: tx("Service exceptionnel, très attentionné.", "Exceptional service, very attentive.") },
-    }),
-  },
-  r25: {
-    name: "Big Portions",
-    evidence: makeEvidence({
-      portion: { score: 5.0, text: tx("Portions énormes, très généreuses.", "Huge portions, very generous.") },
-    }),
-  },
-  r26: {
-    name: "Great Location",
-    evidence: makeEvidence({
-      location: { score: 5.0, text: tx("Emplacement parfait, très facile d’accès.", "Perfect location, very easy to reach.") },
-    }),
-  },
-  r27: {
-    name: "Super Clean & Quiet",
-    evidence: makeEvidence({
-      cleanliness: { score: 4.9, text: tx("Très propre, hygiène excellente.", "Very clean, excellent hygiene.") },
-      ambiance: { score: 4.7, text: tx("Calme, agréable.", "Calm and pleasant.") },
-    }),
-  },
-  r28: {
-    name: "Fast Service",
-    evidence: makeEvidence({
-      service: { score: 4.9, text: tx("Service très rapide et fluide.", "Very fast and smooth service.") },
-      wait_time: { score: 4.8, text: tx("Attente très courte.", "Very short wait.") },
-    }),
-  },
-  r29: {
-    name: "Balanced Choice",
-    evidence: makeEvidence({
-      food_quality: { score: 4.2, text: tx("Bonne qualité, choix équilibré.", "Good quality, balanced choice.") },
-    }),
-  },
-  r30: {
-    name: "Late Night Spot",
-    evidence: makeEvidence({
-      ambiance: { score: 4.6, text: tx("Ambiance animée le soir.", "Lively in the evening.") },
-      location: { score: 4.5, text: tx("Zone vivante, pratique.", "Vibrant area, convenient.") },
-    }),
-  },
+  r17: { name: "Quiet Place", evidence: makeEvidence({ ambiance: { score: 4.8, text: tx("Très calme, idéal pour discuter.", "Very quiet, perfect to talk.") } }) },
+  r18: { name: "Lively Night", evidence: makeEvidence({ ambiance: { score: 5.0, text: tx("Ambiance très animée, musique.", "Very lively vibe, music.") } }) },
+  r19: { name: "Super Location", evidence: makeEvidence({ location: { score: 5.0, text: tx("Emplacement excellent, très pratique.", "Excellent location, very convenient.") } }) },
+  r20: { name: "Short Wait", evidence: makeEvidence({ wait_time: { score: 5.0, text: tx("Attente quasi nulle, très rapide.", "Almost no waiting, very fast.") } }) },
+  r21: { name: "High Quality", evidence: makeEvidence({ food_quality: { score: 5.0, text: tx("Excellente qualité, saveurs très maîtrisées.", "Excellent quality, flavors are well mastered.") } }) },
+  r22: { name: "Best Value", evidence: makeEvidence({ price: { score: 4.9, text: tx("Excellent prix, très bon rapport.", "Excellent pricing, great value.") } }) },
+  r23: { name: "Cozy & Calm", evidence: makeEvidence({ ambiance: { score: 4.9, text: tx("Très cosy et calme.", "Very cozy and calm.") } }) },
+  r24: { name: "Premium Service", evidence: makeEvidence({ service: { score: 5.0, text: tx("Service exceptionnel, très attentionné.", "Exceptional service, very attentive.") } }) },
+  r25: { name: "Big Portions", evidence: makeEvidence({ portion: { score: 5.0, text: tx("Portions énormes, très généreuses.", "Huge portions, very generous.") } }) },
+  r26: { name: "Great Location", evidence: makeEvidence({ location: { score: 5.0, text: tx("Emplacement parfait, très facile d’accès.", "Perfect location, very easy to reach.") } }) },
+  r27: { name: "Super Clean & Quiet", evidence: makeEvidence({ cleanliness: { score: 4.9, text: tx("Très propre, hygiène excellente.", "Very clean, excellent hygiene.") } }) },
+  r28: { name: "Fast Service", evidence: makeEvidence({ service: { score: 4.9, text: tx("Service très rapide et fluide.", "Very fast and smooth service.") } }) },
+  r29: { name: "Balanced Choice", evidence: makeEvidence({ food_quality: { score: 4.2, text: tx("Bonne qualité, choix équilibré.", "Good quality, balanced choice.") } }) },
+  r30: { name: "Late Night Spot", evidence: makeEvidence({ ambiance: { score: 4.6, text: tx("Ambiance animée le soir.", "Lively in the evening.") } }) },
 };
 
 /* =========================================================
@@ -552,6 +474,10 @@ function pickTimeCondition() {
   return "full";
 }
 
+function pickOrderAB() {
+  return Math.random() < 0.5 ? ["A", "B"] : ["B", "A"];
+}
+
 function importanceScore(val) {
   const n = Number(val);
   return Number.isFinite(n) ? n : 0;
@@ -561,9 +487,6 @@ function cueLabel(cueId, lang) {
   return (CUE_LABELS[cueId] && CUE_LABELS[cueId][lang]) || cueId;
 }
 
-/**
- * Trie les cues sélectionnés par importance (desc), puis cueId (stable, indépendant de la langue)
- */
 function sortSelectedCuesByImportance(prefMap) {
   return Object.values(prefMap)
     .filter((c) => c.selected)
@@ -575,33 +498,23 @@ function sortSelectedCuesByImportance(prefMap) {
     });
 }
 
-/**
- * cueSet = uniquement cues sélectionnés, cap à K (Top-K)
- */
 function makeCueSetSelectedOnly(prefMap, K) {
   const chosen = sortSelectedCuesByImportance(prefMap).map((c) => c.id);
   return chosen.slice(0, K);
 }
 
-/**
- * Aligned order = cues sélectionnés triés par importance (déjà Top-K)
- */
 function orderAligned(prefMap, cueSet) {
   const chosen = sortSelectedCuesByImportance(prefMap).map((c) => c.id);
   const inChosen = chosen.filter((x) => cueSet.includes(x));
   return inChosen.slice(0, cueSet.length);
 }
 
-/**
- * Baseline = inverse exact de l'aligned
- */
 function orderBaselineFromAligned(alignedOrderArr) {
-  return [...alignedOrderArr].reverse();
+  return [...alignedOrderArr];
 }
 
 /* =========================================================
-   ✅ FIX 3: 16s => au moins 2× la longueur (mots) de la version 8s
-   (8s inchangé)
+   WORD HELPERS + PADDING
    ========================================================= */
 
 function wordTokens(s) {
@@ -626,10 +539,6 @@ function standardPaddingText(lang) {
   );
 }
 
-/**
- * Si texte < minWords, on ajoute du texte standard neutre pour atteindre exactement minWords.
- * Si texte >= minWords, on ne touche pas (important pour éviter de modifier le 8s).
- */
 function ensureMinWords(text, lang, minWords) {
   const base = wordTokens(text);
   if (base.length >= minWords) return text;
@@ -646,6 +555,20 @@ function ensureMinWords(text, lang, minWords) {
 
   const out = base.concat(slice).join(" ") + (fill.length > need ? "…" : "");
   return out.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * ✅ A) Equalize length between A and B:
+ * targetWords = max(words(A), words(B)), pad the shorter to targetWords.
+ */
+function equalizeABWords(textA, textB, lang) {
+  const wA = wordTokens(textA).length;
+  const wB = wordTokens(textB).length;
+  const target = Math.max(wA, wB);
+
+  const outA = wA < target ? ensureMinWords(textA, lang, target) : textA;
+  const outB = wB < target ? ensureMinWords(textB, lang, target) : textB;
+  return { A: outA, B: outB, targetWords: target };
 }
 
 /* =========================================================
@@ -694,34 +617,28 @@ function shuffleDeterministic(arr, seedStr) {
    NATURAL EXPLANATION BUILDER (bilingue)
    ========================================================= */
 
-   function sharedRemainder(lang) {
-    if (lang === "en") {
-      return (
-        "several positive aspects stand out from the available reviews. " +
-        "This provides a useful overview, although some details may vary depending on time and crowd."
-      );
-    }
+function sharedRemainder(lang) {
+  if (lang === "en") {
     return (
-      "plusieurs éléments positifs ressortent des avis disponibles. " +
-      "Cela donne un aperçu utile, même si certains détails peuvent varier selon l’heure et l’affluence."
+      "several positive aspects stand out from the available reviews. " +
+      "This provides a useful overview, although some details may vary depending on time and crowd."
     );
   }
-  
+  return (
+    "plusieurs éléments positifs ressortent des avis disponibles. " +
+    "Cela donne un aperçu utile, même si certains détails peuvent varier selon l’heure et l’affluence."
+  );
+}
 
-// ✅ AJOUT : forcer le préfixe "Nous vous recommandons ce restaurant parce que" au tout début
 function forceReasonPrefixAtStart(lang, paragraph) {
   const p = String(paragraph || "").trim();
 
   if (lang === "fr") {
-    // Si ça commence déjà par "Nous vous recommandons ce restaurant parce ...", on ne touche pas.
     if (/^Nous\s+vous\s+recommandons\s+ce\s+restaurant\s+parce\s+qu/i.test(p)) return p;
     if (/^Nous\s+vous\s+recommandons\s+ce\s+restaurant\s+parce\s+que/i.test(p)) return p;
-
-    // Sinon, on force EXACTEMENT la phrase demandée au début
     return `Nous vous recommandons ce restaurant parce que ${p}`;
   }
 
-  // EN : même logique (au cas où)
   if (/^We\s+recommend\s+this\s+restaurant\s+because/i.test(p)) return p;
   return `We recommend this restaurant because ${p}`;
 }
@@ -768,54 +685,46 @@ function cueSentence(cueId, prefId, evidenceText, idx, lang) {
       if (prefId === "good") return `${c} food quality seems satisfactory (${ev}).`;
       return `${c} food quality is described as ${ev}.`;
     }
-
     if (cueId === "service") {
       if (prefId === "fast") return `${c} service seems fast, making the experience easier (${ev}).`;
       if (prefId === "warm") return `${c} service appears warm and pleasant (${ev}).`;
       if (prefId === "attentive") return `${c} service seems attentive (${ev}).`;
       return `${c} service is described as ${ev}.`;
     }
-
     if (cueId === "price") {
       if (prefId === "tight") return `${c} pricing seems suitable for a tight budget (${ev}).`;
       if (prefId === "medium") return `${c} pricing seems consistent for a medium budget (${ev}).`;
       if (prefId === "flexible") return `${c} even with a flexible budget, pricing remains reasonable (${ev}).`;
       return `${c} pricing is described as ${ev}.`;
     }
-
     if (cueId === "ambiance") {
       if (prefId === "calm") return `${c} the ambiance feels calm and pleasant (${ev}).`;
       if (prefId === "lively") return `${c} the ambiance seems lively (${ev}).`;
       if (prefId === "cozy") return `${c} the ambiance feels cozy (${ev}).`;
       return `${c} the ambiance is described as ${ev}.`;
     }
-
     if (cueId === "wait_time") {
       if (prefId === "short") return `${c} wait time seems short (${ev}).`;
       if (prefId === "ok") return `${c} wait time seems reasonable (${ev}).`;
       return `${c} wait time is described as ${ev}.`;
     }
-
     if (cueId === "cleanliness") {
       if (prefId === "spotless") return `${c} the place seems spotless (${ev}).`;
       if (prefId === "very_clean") return `${c} the place seems very clean (${ev}).`;
       if (prefId === "ok") return `${c} the place seems clean (${ev}).`;
       return `${c} cleanliness is described as ${ev}.`;
     }
-
     if (cueId === "location") {
       if (prefId === "close") return `${c} the location seems convenient (${ev}).`;
       if (prefId === "nice_area") return `${c} the area seems pleasant (${ev}).`;
       return `${c} the location is described as ${ev}.`;
     }
-
     if (cueId === "portion") {
       if (prefId === "generous") return `${c} portions seem generous (${ev}).`;
       if (prefId === "normal") return `${c} portions seem adequate (${ev}).`;
       if (prefId === "light") return `${c} portions seem rather light (${ev}).`;
       return `${c} portions are described as ${ev}.`;
     }
-
     return `${c} available information indicates ${ev}.`;
   }
 
@@ -826,54 +735,46 @@ function cueSentence(cueId, prefId, evidenceText, idx, lang) {
     if (prefId === "good") return `${c} la qualité des plats semble satisfaisante (${ev}).`;
     return `${c} la qualité des plats est décrite comme ${ev}.`;
   }
-
   if (cueId === "service") {
     if (prefId === "fast") return `${c} le service semble rapide, ce qui rend l’expérience plus simple (${ev}).`;
     if (prefId === "warm") return `${c} le service paraît chaleureux et agréable (${ev}).`;
     if (prefId === "attentive") return `${c} le service paraît attentionné (${ev}).`;
     return `${c} le service est décrit comme ${ev}.`;
   }
-
   if (cueId === "price") {
     if (prefId === "tight") return `${c} le prix paraît adapté à un budget serré (${ev}).`;
     if (prefId === "medium") return `${c} le prix semble cohérent pour un budget moyen (${ev}).`;
     if (prefId === "flexible") return `${c} même avec un budget flexible, le prix reste raisonnable (${ev}).`;
     return `${c} le prix est décrit comme ${ev}.`;
   }
-
   if (cueId === "ambiance") {
     if (prefId === "calm") return `${c} l’ambiance paraît plutôt calme et agréable (${ev}).`;
     if (prefId === "lively") return `${c} l’ambiance semble animée (${ev}).`;
     if (prefId === "cozy") return `${c} l’ambiance paraît conviviale (${ev}).`;
     return `${c} l’ambiance est décrite comme ${ev}.`;
   }
-
   if (cueId === "wait_time") {
     if (prefId === "short") return `${c} l’attente semble courte (${ev}).`;
     if (prefId === "ok") return `${c} l’attente semble raisonnable (${ev}).`;
     return `${c} l’attente est décrite comme ${ev}.`;
   }
-
   if (cueId === "cleanliness") {
     if (prefId === "spotless") return `${c} le lieu paraît impeccable (${ev}).`;
     if (prefId === "very_clean") return `${c} le lieu paraît très propre (${ev}).`;
     if (prefId === "ok") return `${c} le lieu semble propre (${ev}).`;
     return `${c} la propreté est décrite comme ${ev}.`;
   }
-
   if (cueId === "location") {
     if (prefId === "close") return `${c} l’emplacement paraît pratique (${ev}).`;
     if (prefId === "nice_area") return `${c} le quartier semble agréable (${ev}).`;
     return `${c} la localisation est décrite comme ${ev}.`;
   }
-
   if (cueId === "portion") {
     if (prefId === "generous") return `${c} les portions semblent généreuses (${ev}).`;
     if (prefId === "normal") return `${c} les portions semblent correctes (${ev}).`;
     if (prefId === "light") return `${c} les portions semblent plutôt légères (${ev}).`;
     return `${c} les portions sont décrites comme ${ev}.`;
   }
-
   return `${c} les informations disponibles indiquent ${ev}.`;
 }
 
@@ -889,7 +790,6 @@ function buildExplanationOneParagraph({ restaurant, cueOrder, cueSet, prefMap, m
   const remainder = sharedRemainder(lang);
   const parts = mode === "remainder_first" ? [remainder, ...cueSentences] : [...cueSentences, remainder];
 
-  // ✅ MODIF : on force le préfixe uniquement si pas déjà présent
   return forceReasonPrefixAtStart(lang, parts.join(" ").replace(/\s+/g, " ").trim());
 }
 
@@ -1024,7 +924,12 @@ function getPreferenceOptions(cueId, lang, t) {
   };
 
   const src = lang === "en" ? en : fr;
-  return src[cueId] || [{ id: "", label: t.choose }, { id: "any", label: lang === "en" ? "Doesn’t matter" : "Peu importe" }];
+  return (
+    src[cueId] || [
+      { id: "", label: t.choose },
+      { id: "any", label: lang === "en" ? "Doesn’t matter" : "Peu importe" },
+    ]
+  );
 }
 
 /* =========================================================
@@ -1243,6 +1148,10 @@ function ReadingScreen({
   const timerRef = useRef(null);
   const t0Ref = useRef(0);
   const readingStartRef = useRef(0);
+  const lastFocusLostRef = useRef(0);
+
+  // ✅ B) disable "Back" once experiment started (prepare/reading/questions)
+  const backDisabled = true;
 
   const clearTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -1265,9 +1174,43 @@ function ReadingScreen({
     }, 120);
   };
 
+  const [answers, setAnswers] = useState({
+    A: {
+      decision: "",
+      confidence: "",
+      startsImportant: "",
+      clarity: "",
+      helpful: "",
+      gist: [],
+      coverage: "",
+      readingTimeSec: null,
+      fullReadingTimeSec: null,
+      // ✅ Q8/Q9 yes/no/unsure
+      feltRushed: "",
+      enoughTime: "",
+      focusLostCount: 0,
+    },
+    B: {
+      decision: "",
+      confidence: "",
+      startsImportant: "",
+      clarity: "",
+      helpful: "",
+      gist: [],
+      coverage: "",
+      readingTimeSec: null,
+      fullReadingTimeSec: null,
+      feltRushed: "",
+      enoughTime: "",
+      focusLostCount: 0,
+    },
+  });
+
   const startReadingTimer = () => {
     if (readSeconds == null) return;
     clearTimer();
+
+    const whichAtStart = which;
     t0Ref.current = Date.now();
     readingStartRef.current = Date.now();
     setProgress(0);
@@ -1278,6 +1221,16 @@ function ReadingScreen({
       setProgress(Math.round(p * 100));
       if (elapsed >= readSeconds) {
         clearTimer();
+
+        const sec = Math.max(0, Math.round((Date.now() - readingStartRef.current) / 1000));
+        setAnswers((prev) => ({
+          ...prev,
+          [whichAtStart]: {
+            ...prev[whichAtStart],
+            readingTimeSec: sec,
+          },
+        }));
+
         setPhase("questions");
       }
     }, 60);
@@ -1298,42 +1251,50 @@ function ReadingScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  const [answers, setAnswers] = useState({
-    A: {
-      decision: "",
-      confidence: "", // low/mid/high
-      startsImportant: "", // yes/no/unsure
-      clarity: "", // yes/not_really/no
-      helpful: "", // yes/no/unsure
-      gist: [],
-      coverage: "",
-      fullReadingTimeSec: null,
-    },
-    B: {
-      decision: "",
-      confidence: "",
-      startsImportant: "",
-      clarity: "",
-      helpful: "",
-      gist: [],
-      coverage: "",
-      fullReadingTimeSec: null,
-    },
-  });
-
   const cur = answers[which];
 
   const setCur = (patch) => {
     setAnswers((prev) => ({ ...prev, [which]: { ...prev[which], ...patch } }));
   };
 
-  // Q5: 4 indices = 2 vrais (dans cette explication) + 2 faux (hors cueSet) + "Je ne sais pas"
+  // Optional: track focus lost during reading
+  useEffect(() => {
+    if (phase !== "reading") return;
+
+    const bump = () => {
+      const now = Date.now();
+      if (now - lastFocusLostRef.current < 250) return;
+      lastFocusLostRef.current = now;
+
+      setAnswers((prev) => ({
+        ...prev,
+        [which]: {
+          ...prev[which],
+          focusLostCount: (prev[which].focusLostCount || 0) + 1,
+        },
+      }));
+    };
+
+    const onVis = () => {
+      if (document.hidden) bump();
+    };
+    const onBlur = () => bump();
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", onBlur);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [phase, which]);
+
+  // Q5 options
   const gistOptions = useMemo(() => {
     const orderForThis = (cueOrderByWhich?.[which] || []).filter((id) => cueSet.includes(id));
     const trueTwo = orderForThis.slice(0, 2);
 
-    const allCueIds = CUE_IDS;
-    const distractorPool = allCueIds.filter((id) => !cueSet.includes(id));
+    const distractorPool = CUE_IDS.filter((id) => !cueSet.includes(id));
     const falseTwo = pickDeterministicN(distractorPool, 2, `${participantId}_${which}_distractors`);
 
     const four = [...trueTwo, ...falseTwo];
@@ -1362,7 +1323,17 @@ function ReadingScreen({
 
   const gistOk = (cur.gist?.length || 0) === 2 || ((cur.gist?.length || 0) === 1 && cur.gist?.[0] === "dont_know");
 
-  const curComplete = Boolean(cur.decision && cur.confidence && cur.startsImportant && cur.clarity && cur.helpful && gistOk && cur.coverage);
+  const curComplete = Boolean(
+    cur.decision &&
+      cur.confidence &&
+      cur.startsImportant &&
+      cur.clarity &&
+      cur.helpful &&
+      gistOk &&
+      cur.coverage &&
+      cur.feltRushed &&
+      cur.enoughTime
+  );
 
   const recommendationPrefix = selectedCount <= 1 ? t.basedOnSingle : t.basedOnPlural;
 
@@ -1379,7 +1350,7 @@ function ReadingScreen({
 
   const onFullContinue = () => {
     const sec = Math.max(0, Math.round((Date.now() - readingStartRef.current) / 1000));
-    setCur({ fullReadingTimeSec: sec });
+    setCur({ readingTimeSec: sec, fullReadingTimeSec: sec });
     setPhase("questions");
   };
 
@@ -1391,8 +1362,7 @@ function ReadingScreen({
       <div className="card card-wide">
         <h2>{t.recommendationH2}</h2>
         <p className="screen-description" style={{ marginBottom: 0 }}>
-          {recommendationPrefix}{" "}
-          <span style={{ color: "#2563eb", fontWeight: 900 }}>{restaurant?.name || "—"}</span>
+          {recommendationPrefix} <span style={{ color: "#2563eb", fontWeight: 900 }}>{restaurant?.name || "—"}</span>
         </p>
       </div>
 
@@ -1406,7 +1376,6 @@ function ReadingScreen({
             <div className="blink-red">{prepareTitle}</div>
 
             {readSeconds != null ? (
-              // ✅ FIX 4: mettre cette phrase en rouge (8s ou 16s)
               <div style={{ marginTop: 10, fontWeight: 900, color: "#b91c1c" }}>{t.youMustRead(readSeconds)}</div>
             ) : (
               <div style={{ marginTop: 10, fontWeight: 900 }}>{t.youCanRead}</div>
@@ -1604,10 +1573,48 @@ function ReadingScreen({
                   ))}
                 </div>
               </div>
+
+              {/* ✅ Q8 now yes/no/unsure */}
+              <div style={{ borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: 10 }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>{t.q8}</div>
+                <div className="comparison-options" style={{ justifyContent: "flex-start" }}>
+                  {[{ id: "yes", label: t.yes }, { id: "no", label: t.no }, { id: "unsure", label: t.unsure }].map((opt) => (
+                    <label key={opt.id} className={`radio-option${cur.feltRushed === opt.id ? " active" : ""}`}>
+                      <input
+                        type="radio"
+                        name={`feltRushed_${which}`}
+                        value={opt.id}
+                        checked={cur.feltRushed === opt.id}
+                        onChange={(e) => setCur({ feltRushed: e.target.value })}
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* ✅ Q9 now yes/no/unsure */}
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>{t.q9}</div>
+                <div className="comparison-options" style={{ justifyContent: "flex-start" }}>
+                  {[{ id: "yes", label: t.yes }, { id: "no", label: t.no }, { id: "unsure", label: t.unsure }].map((opt) => (
+                    <label key={opt.id} className={`radio-option${cur.enoughTime === opt.id ? " active" : ""}`}>
+                      <input
+                        type="radio"
+                        name={`enoughTime_${which}`}
+                        value={opt.id}
+                        checked={cur.enoughTime === opt.id}
+                        onChange={(e) => setCur({ enoughTime: e.target.value })}
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="nav-buttons" style={{ marginTop: 14, justifyContent: "space-between" }}>
-              <button className="btn btn-secondary" onClick={onBack}>
+              <button className="btn btn-secondary" onClick={onBack} disabled={backDisabled} title={backDisabled ? "Back disabled to keep paired design" : ""}>
                 {t.back}
               </button>
               <button className="btn btn-primary" disabled={!curComplete} onClick={goNext}>
@@ -1658,9 +1665,11 @@ function ThankYouScreen({ data, lang }) {
 
 export default function App() {
   const [screen, setScreen] = useState(0);
+
+  // participant id stable
   const [participantId] = useState(generateParticipantId);
 
-  // language (FR default)
+  // language
   const [lang, setLang] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY_LANG);
     if (saved && LANGS.includes(saved)) return saved;
@@ -1669,12 +1678,32 @@ export default function App() {
   });
   const t = I18N[lang];
 
-  // time condition (persist)
+  // ✅ C) timeCondition and orderAB per participant/session (sessionStorage)
+  const TIME_KEY = `study_time_${participantId}_v1`;
+  const ORDER_KEY = `study_orderAB_${participantId}_v1`;
+
   const [timeCondition] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_TIME);
+    const saved = sessionStorage.getItem(TIME_KEY);
     if (saved && TIME_CONDITIONS.includes(saved)) return saved;
     const chosen = pickTimeCondition();
-    localStorage.setItem(STORAGE_KEY_TIME, chosen);
+    sessionStorage.setItem(TIME_KEY, chosen);
+    return chosen;
+  });
+
+  const [orderAB] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(ORDER_KEY);
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr) && arr.length === 2 && (arr[0] === "A" || arr[0] === "B") && (arr[1] === "A" || arr[1] === "B") && arr[0] !== arr[1]) {
+          return arr;
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+    const chosen = pickOrderAB();
+    sessionStorage.setItem(ORDER_KEY, JSON.stringify(chosen));
     return chosen;
   });
 
@@ -1694,22 +1723,13 @@ export default function App() {
   });
 
   const selectedCount = useMemo(() => Object.values(prefMap).filter((c) => c.selected).length, [prefMap]);
-
   const selectedCues = useMemo(() => Object.values(prefMap).filter((c) => c.selected).map((c) => c.id), [prefMap]);
-
   const selectedCuesKey = useMemo(() => [...selectedCues].sort().join("|"), [selectedCues]);
 
-  // ✅ FIXE : A = aligned, B = baseline, et ordre A puis B (explication 1 puis 2)
-  const [config] = useState(() => ({ alignedIsA: true, orderAB: ["A", "B"] }));
-
-  /* =========================================================
-     Restaurant LOCK (pour garantir même resto pour exp1 & exp2)
-     ========================================================= */
-
+  // restaurant lock
   const [lockedRestaurantKey, setLockedRestaurantKey] = useState(null);
   const [isRecoLoading, setIsRecoLoading] = useState(false);
 
-  // Fetch recommendation ONLY when entering screen 2, then LOCK the restaurant.
   useEffect(() => {
     if (screen !== 2) return;
     if (lockedRestaurantKey) return;
@@ -1728,12 +1748,9 @@ export default function App() {
         console.log("[RECO] response =", reco);
 
         const top = reco?.items?.[0]?.item_id;
-
         if (top && RESTAURANTS[top]) {
-          console.log("[RECO] LOCK restaurant =", top);
           setLockedRestaurantKey(top);
         } else {
-          console.warn("[RECO] invalid top, LOCK fallback r01. top=", top);
           setLockedRestaurantKey("r01");
         }
       } catch (e) {
@@ -1749,19 +1766,20 @@ export default function App() {
   const restaurantKey = lockedRestaurantKey || "r01";
   const restaurant = RESTAURANTS[restaurantKey] || RESTAURANTS.r01;
 
-  // cueset and orders (condition courante)
+  // cueset + orders
   const cueSet = useMemo(() => makeCueSetSelectedOnly(prefMap, K), [prefMap, K]);
   const alignedOrderArr = useMemo(() => orderAligned(prefMap, cueSet), [prefMap, cueSet]);
   const baselineOrderArr = useMemo(() => orderBaselineFromAligned(alignedOrderArr), [alignedOrderArr]);
 
-  // ✅ FIX 3: référence 8s (uniquement pour calculer la longueur cible en 16s)
+  // references for 8s (for 16s min length target)
   const cueSet8 = useMemo(() => makeCueSetSelectedOnly(prefMap, getK("8s")), [prefMap]);
   const alignedOrder8 = useMemo(() => orderAligned(prefMap, cueSet8), [prefMap, cueSet8]);
   const baselineOrder8 = useMemo(() => orderBaselineFromAligned(alignedOrder8), [alignedOrder8]);
 
-  // explanation texts (bilingue) + FIXE A/B
+  // build explanations + enforce:
+  // - 16s: >= 2x length of 8s reference
+  // - A) equalize length A vs B (applied in 16s; easy to extend to all conditions)
   const expTexts = useMemo(() => {
-    // base (condition courante) — ✅ 8s inchangé
     const alignedBase = buildExplanationOneParagraph({
       restaurant,
       cueOrder: alignedOrderArr,
@@ -1780,7 +1798,6 @@ export default function App() {
       lang,
     });
 
-    // référence 8s (mêmes modes) — pour fixer une cible "2×"
     const alignedRef8 = buildExplanationOneParagraph({
       restaurant,
       cueOrder: alignedOrder8,
@@ -1799,19 +1816,23 @@ export default function App() {
       lang,
     });
 
-    // ✅ correction 16s: si trop court, on complète avec texte standard neutre
+    let A = alignedBase;
+    let B = baselineBase;
+
     if (timeCondition === "16s") {
       const targetA = wordTokens(alignedRef8).length * 2;
       const targetB = wordTokens(baselineRef8).length * 2;
 
-      const alignedText16 = ensureMinWords(alignedBase, lang, targetA);
-      const baselineText16 = ensureMinWords(baselineBase, lang, targetB);
+      A = ensureMinWords(A, lang, targetA);
+      B = ensureMinWords(B, lang, targetB);
 
-      return { A: alignedText16, B: baselineText16 };
+      // ✅ A) equalize A vs B
+      const eq = equalizeABWords(A, B, lang);
+      A = eq.A;
+      B = eq.B;
     }
 
-    // FIXE : A = aligned, B = baseline
-    return { A: alignedBase, B: baselineBase };
+    return { A, B };
   }, [
     restaurant,
     alignedOrderArr,
@@ -1825,14 +1846,11 @@ export default function App() {
     cueSet8,
   ]);
 
-  const cueOrderByWhich = useMemo(() => {
-    return { A: alignedOrderArr, B: baselineOrderArr };
-  }, [alignedOrderArr, baselineOrderArr]);
+  const cueOrderByWhich = useMemo(() => ({ A: alignedOrderArr, B: baselineOrderArr }), [alignedOrderArr, baselineOrderArr]);
 
   const [studyData, setStudyData] = useState(null);
 
   const goto = (s) => {
-    // when going to screen 2, reset lock so we fetch and then lock again
     if (s === 2) {
       setLockedRestaurantKey(null);
       setIsRecoLoading(false);
@@ -1850,12 +1868,12 @@ export default function App() {
       K,
       restaurantKey,
       restaurantName: restaurant?.name,
-      alignedIsA: config.alignedIsA,
-      orderAB: config.orderAB,
+      alignedIsA: true,
+      orderAB,
       cueSet,
       alignedOrder: alignedOrderArr,
       baselineOrder: baselineOrderArr,
-      selectedCues: [...selectedCues].sort(), // utile pour analyse, reste léger
+      selectedCues: [...selectedCues].sort(),
     }),
     [
       participantId,
@@ -1865,8 +1883,7 @@ export default function App() {
       K,
       restaurantKey,
       restaurant?.name,
-      config.alignedIsA,
-      config.orderAB,
+      orderAB,
       cueSet,
       alignedOrderArr,
       baselineOrderArr,
@@ -1876,7 +1893,6 @@ export default function App() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // if screen 2 but restaurant not locked yet, show preparing screen
   const showPreparing = screen === 2 && (isRecoLoading || !lockedRestaurantKey);
 
   return (
@@ -1905,9 +1921,9 @@ export default function App() {
       {screen === 2 && !showPreparing && (
         <ReadingScreen
           participantId={participantId}
-          restaurant={restaurant} // ✅ same restaurant for exp 1 & 2 because locked
+          restaurant={restaurant}
           expTexts={expTexts}
-          orderAB={config.orderAB} // ✅ ["A","B"] fixed
+          orderAB={orderAB}
           readSeconds={readSeconds}
           cueSet={cueSet}
           selectedCount={selectedCount}
