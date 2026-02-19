@@ -12,7 +12,6 @@ app = FastAPI(title="xrec reco-api")
 
 # ----------------------------
 # CORS (for browser)
-# ----------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -23,7 +22,9 @@ app.add_middleware(
         "http://localhost:5176",
         "http://localhost:5177",
         "http://localhost:5178",
-        # Render front
+
+        # Render front (AJOUTE CES DOMAINES)
+        "https://xrec-user-study-1.onrender.com",
         "https://xrec-user-study.onrender.com",
     ],
     allow_credentials=True,
